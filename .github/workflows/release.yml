@@ -1,0 +1,60 @@
+# PS5 AT9 Converter - Release workflow.
+# Copyright (C) 2026 BlackBearReloaded
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Test
+        run: |
+          python -m pip install numpy
+          python -m unittest discover -s tests
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          grep -q "__version__ = \"${version}\"" ps5at9/__init__.py || { echo "ps5at9.__version__ does not match ${tag}"; exit 1; }
+          mkdir -p artifacts/stage/ps5-at9-converter artifacts/pyz
+          cp -r ps5_at9.py ps5at9 docs third_party README.md LICENSE THIRD_PARTY_NOTICES.md artifacts/stage/ps5-at9-converter/
+          find artifacts/stage -name __pycache__ -prune -exec rm -rf {} +
+          (cd artifacts/stage && zip -qr "../ps5-at9-converter-${tag}.zip" ps5-at9-converter)
+          cp -r ps5at9 artifacts/pyz/
+          find artifacts/pyz -name __pycache__ -prune -exec rm -rf {} +
+          cp ps5_at9.py artifacts/pyz/__main__.py
+          python -m zipapp artifacts/pyz -o artifacts/ps5-at9-converter.pyz -p "/usr/bin/env python3" -c
+          python artifacts/ps5-at9-converter.pyz --input tests/data/tone-44k-stereo.mp3 --output artifacts/check.at9 --duration max
+          cd artifacts
+          sha256sum "ps5-at9-converter-${tag}.zip" ps5-at9-converter.pyz > SHA256SUMS.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "artifacts/ps5-at9-converter-${GITHUB_REF_NAME}.zip" \
+            artifacts/ps5-at9-converter.pyz \
+            artifacts/SHA256SUMS.txt \
+            --repo "${{ github.repository }}" \
+            --verify-tag \
+            --generate-notes \
+            --title "ps5-at9-converter ${GITHUB_REF_NAME}"

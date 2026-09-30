@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.at9 binary
+*.pyz binary

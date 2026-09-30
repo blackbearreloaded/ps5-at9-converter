@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+artifacts/
+dist/
+*.pyz
+*.at9
+*.wav
